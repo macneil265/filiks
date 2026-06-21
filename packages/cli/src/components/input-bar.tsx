@@ -7,6 +7,7 @@ import { StatusBar } from "./status-bar";
 import { CommandMenu } from "./command-menu";
 import type {Command} from "./command-menu/types";
 import { useCommandMenu } from "./command-menu/use-command-menu";
+import { resolve } from "bun";
 
 
 type Props = {
@@ -36,13 +37,7 @@ export function InputBar({ onSubmit, disabled }: Props) {
         setSelectedIndex,
     } = useCommandMenu();
 
-    const handleCommandExecute = useCallback(
-        (index: number) => {
-            const command = resolveCommand(index);
-            handleCommand(command)
-        },
-        [],
-    )
+
 
     const handleTextareaContentChange = useCallback(() => {
         const textarea = textareaRef.current;
@@ -79,6 +74,14 @@ export function InputBar({ onSubmit, disabled }: Props) {
                 textarea.insertText(command.value + "");
             }
     }, [renderer]);
+
+        const handleCommandExecute = useCallback(
+        (index: number) => {
+            const command = resolveCommand(index);
+            handleCommand(command)
+        },
+        [resolveCommand, handleCommand],
+    )
 
     // Wire up textarea submit handler once so it always reads the latest state
     useEffect(() => {
