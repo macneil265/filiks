@@ -5,47 +5,73 @@
             name: "new",
             description: "Start a new conversation",
             value: "/new",
-            
+            action: (ctx) => {
+                ctx.toast.show({ message: "Starting new conversation..."});
+            },
     },
     {
         name: "agents",
         description: "Switch agents",
-        value: "/agents"
+        value: "/agents",
+        action: (ctx) => {
+                ctx.toast.show({ message: "Switching Agents..."});
+            },
     },
     {
         name: "models",
         description: "Select Ai models for generation",
-        value: "/model"
+        value: "/model",
+        action: (ctx) => {
+                ctx.toast.show({ message: "Selecting model..."});
+            },
     },
     {
         name: "session",
         description: "Browser past sessions",
-        value: "/sessions"
+        value: "/sessions",
+        action: (ctx) => {
+                ctx.toast.show({ message: "Loading Sessions..."});
+            },
     },
     {
         name: "theme",
         description: "Change color theme",
-        value: "/theme"
+        value: "/theme",
+        action: (ctx) => {
+                ctx.toast.show({ message: "Opening theme picker..."});
+            },
     },
     {
         name: "login",
         description: "Sign in with your browser",
-        value: "/login"
+        value: "/login",
+        action: (ctx) => {
+                ctx.toast.show({ message: "Opening browser to sign in..."});
+            },
     },
     {
         name: "logout",
         description: "Signout of your account",
-        value: "/logout"
+        value: "/logout",
+        action: (ctx) => {
+                ctx.toast.show({ variant: "success", message: "Signed out..."});
+            },
     },
     {
         name: "upgrade",
         description: "Buy more credits",
-        value: "/upgrade"
+        value: "/upgrade",
+        action: (ctx) => {
+                ctx.toast.show({ message: "Opening credits checkout..."});
+            },
     },
     {
         name: "usage",
         description: "Open billing portal in your browser",
-        value: "/usage"
+        value: "/usage",
+        action: (ctx) => {
+                ctx.toast.show({ message: "Opening billing portal..."});
+            },
     },
         {
             name: "exit",
