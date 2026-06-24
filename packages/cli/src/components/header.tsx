@@ -1,11 +1,12 @@
 export function Header() {
     return (
-        <box justifyContent="center" alignItems="center">
-            <box flexDirection="row" justifyContent="center" gap={1} alignItems="center">
-                <ascii-font font="tiny" text="Fi" color="gray" />
-                <ascii-font font="tiny" text="li" />
-                <ascii-font font="tiny" text="ks" color="gray" />
+        <box flexDirection="column" alignItems="center" gap={0}> 
+                <box width={50} alignItems="center" justifyContent="center">
+                    <ascii-font font="block" text="filiks" color={["#ffefef", "#10a2db"]} />
+                </box>
+                <box width={43} alignItems="center" justifyContent="center">
+                    <text fg="#ffffff">Built different, from Malawi to the world.</text>
+                </box>
             </box>
-        </box>
     );
-};
+}

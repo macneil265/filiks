@@ -14,15 +14,21 @@
         description: "Switch agents",
         value: "/agents",
         action: (ctx) => {
-                ctx.toast.show({ message: "Switching Agents..."});
+                ctx.dialog.open({
+                    title: "Select Mode",
+                    children: <text>Agent selection coming soon...</text>,
+                    });
             },
     },
     {
         name: "models",
         description: "Select Ai models for generation",
-        value: "/model",
+        value: "/models",
         action: (ctx) => {
-                ctx.toast.show({ message: "Selecting model..."});
+                ctx.dialog.open({
+                    title: "Select Model",
+                    children: <text>Model selection coming soon...</text>,
+                    });
             },
     },
     {
