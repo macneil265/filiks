@@ -6,18 +6,22 @@
   "scripts": {
     "dev": "bun run --watch src/index.tsx"
   },
+  "dependencies": {
+    "@filiks/shared": "workspace:*",
+    "@opentui/core": "^0.4.1",
+    "@opentui/react": "^0.4.1",
+    "hono": "^4.12.27",
+    "opentui-spinner": "^0.0.7",
+    "react": "^19.2.6",
+    "react-router": "^8.0.1",
+    "zod": "^4.4.3"
+  },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/react": "^19.2.17"
+    "@types/react": "^19.2.17",
+    "@filiks/server": "workspace:*"
   },
   "peerDependencies": {
     "typescript": "^5"
-  },
-  "dependencies": {
-    "@opentui/core": "^0.4.1",
-    "@opentui/react": "^0.4.1",
-    "opentui-spinner": "^0.0.7",
-    "react": "^19.2.6",
-    "react-router": "^8.0.1"
   }
 }
