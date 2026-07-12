@@ -1,6 +1,6 @@
 # Filiks
 
-Filiks is a terminal-based AI coding assistant. It runs in the CLI, connects to LLM providers (Anthropic, OpenAI), and helps you build software through a conversational interface.
+Filiks is a terminal-based AI coding assistant. It runs in the CLI, connects to LLM providers (OpenRouter, Anthropic, OpenAI), and helps you build software through a conversational interface.
 
 ## Stack
 
@@ -47,5 +47,6 @@ bun run dev:cli
 |---|---|---|
 | `DATABASE_URL` | Yes | Postgres connection string (Neon) |
 | `API_URL` | No | Server URL (defaults to http://localhost:3000) |
+| `OPENROUTER_API_KEY` | For OpenRouter models (default) | OpenRouter API key |
 | `ANTHROPIC_API_KEY` | For Claude models | Anthropic API key |
 | `OPENAI_API_KEY` | For GPT models | OpenAI API key |

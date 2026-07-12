@@ -6,7 +6,7 @@ The chat endpoints use Server-Sent Events (SSE) to stream AI responses in real t
 
 Events follow the standard SSE format:
 
-```
+```text
 event: text-delta
 data: {"type":"text-delta","text":"Hello"}
 
@@ -84,7 +84,7 @@ An error occurred. The stream closes after this event.
 
 ## Streaming Lifecycle
 
-```
+```text
 Client → POST /chat/:sessionId
   Server: saves USER message, loads history, calls LLM
   ├── 0+ text-delta events

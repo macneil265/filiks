@@ -4,7 +4,7 @@
 
 The project uses Bun workspaces with four packages under `packages/*`:
 
-```
+```text
 filiks/
 ├── packages/
 │   ├── server/       # @filiks/server — HTTP server
@@ -17,7 +17,7 @@ filiks/
 
 ## Dependency Graph
 
-```
+```text
 @filiks/cli
   ├── @filiks/server      (types only — AppType for Hono RPC)
   ├── @filiks/database    (types only — enums)
@@ -36,7 +36,7 @@ filiks/
 
 ## Data Flow (Chat)
 
-```
+```text
 User types message
     │
     ▼

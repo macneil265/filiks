@@ -72,13 +72,13 @@ const app = new Hono()
 
     if (!session) {
       Sentry.logger.warn("Session not found", {
-        sessionId: id,
+        sessionId: id.slice(0, 8),
         userId: "mock-user"
       });
       return c.json({ error: "Session not found" }, 404);
     }
     Sentry.logger.info("Loaded session", {
-      sessionId: session.id,
+      sessionId: session.id.slice(0, 8),
     });
     return c.json(session);
   })
@@ -108,8 +108,8 @@ const app = new Hono()
     });
 
     Sentry.logger.info("Created session", {
-      sessionId: session.id,
-      title: session.title,
+      sessionId: session.id.slice(0, 8),
+      titleLength: session.title.length,
     });
     return c.json(session, 201);
   });

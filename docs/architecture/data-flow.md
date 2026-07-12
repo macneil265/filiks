@@ -2,7 +2,7 @@
 
 ## Session Creation
 
-```
+```text
 NewSession screen
     │  POST /sessions  { title, cwd, initialMessage }
     ▼
@@ -20,7 +20,7 @@ POST /chat/:sessionId/resume → SSE stream
 
 ## Message Submission
 
-```
+```text
 InputBar → onSubmit(text)
     │
     ▼
@@ -40,7 +40,7 @@ CLI reads SSE events
 
 ## Interruption
 
-```
+```text
 User presses stop/escape
     │
     ▼
@@ -57,7 +57,7 @@ Client sees stream close without "done"
 
 ## Error Flow
 
-```
+```text
 LLM call fails
     │
     ▼

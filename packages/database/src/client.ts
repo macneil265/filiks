@@ -34,7 +34,8 @@ try {
   const endpointId = (hostname.split(".")[0] ?? "").replace("-pooler", "");
 
   url.hostname = ip;
-  url.search = `sslmode=no-verify&options=endpoint%3D${endpointId}`;
+  url.searchParams.set("sslmode", "no-verify");
+  url.searchParams.set("options", `endpoint=${endpointId}`);
   databaseUrl = url.toString();
 } catch (err) {
   console.warn("[DB] Hostname resolution failed, using original URL:", err);

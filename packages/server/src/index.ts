@@ -23,15 +23,16 @@ app.use(
     tracesSampleRate: 1.0,
     enableLogs: true,
     dataCollection: {
-      // To disable sending user data and HTTP bodies, uncomment the lines below. For more info visit:
-      // https://docs.sentry.io/platforms/javascript/guides/hono/configuration/options/#dataCollection
-      // userInfo: false,
-      // httpBodies: [],
+      userInfo: false,
+      httpBodies: [],
     },
   }),
 );
 
-app.get("/debug-sentry", () => {
+app.get("/debug-sentry", (c) => {
+  if (process.env.NODE_ENV === "production") {
+    return c.json({ error: "Not found" }, 404);
+  }
   // Send a log before throwing the error
   Sentry.logger.info('User triggered test error', {
     action: 'test_error_endpoint',
@@ -46,7 +47,7 @@ app.onError((error, c) => {
     Sentry.logger.warn("handled HTTP error", {
       status: error.status,
       message: error.message || "Request failed",
-      path: c.req.method,
+      path: c.req.path,
       method: c.req.method,
     });
     return c.json({ 

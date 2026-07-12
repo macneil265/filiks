@@ -9,7 +9,7 @@ import { type ChatStreamEvent } from "@filiks/shared";
 import { isSupportedChatModel, resolveChatModel } from "../lib/models";
 
 const submitSchema = z.object({
-  content: z.string(),
+  content: z.string().min(1),
   mode: z.enum(Mode),
   model: z.string().refine(isSupportedChatModel, "Unsupported model"),
 });
@@ -20,7 +20,9 @@ const submitValidator = zValidator("json", submitSchema, (result, c) => {
   }
 });
 
-const activeResumeSessionIds = new Set<string>();
+// Process-local lock. Single-instance only — replace with DB/Redis lock before scaling horizontally.
+const activeSessionIds = new Set<string>();
+const MAX_STREAM_MS = 120_000;
 
 // Strip error messages and empty assistant messages from the conversation
 function buildConversationHistory(
@@ -71,6 +73,10 @@ async function streamAIResponse(
   const startTime = Date.now();
   const resolvedModel = resolveChatModel(model);
   let fullText = "";
+
+  // Guard against stalled provider responses
+  const timeoutSignal = AbortSignal.timeout(MAX_STREAM_MS);
+  timeoutSignal.addEventListener("abort", () => abortController.abort(), { once: true });
 
   const persistInterruptedMessage = async () => {
     if (fullText.length === 0) return;
@@ -187,12 +193,12 @@ const app = new Hono()
       );
     }
 
-    if (activeResumeSessionIds.has(sessionId)) {
+    if (activeSessionIds.has(sessionId)) {
       return c.json({error: "Session already has an active resume"},
         409);
     }
 
-    activeResumeSessionIds.add(sessionId);
+    activeSessionIds.add(sessionId);
 
     const history = buildConversationHistory(session.messages);
     const abortController = new AbortController();
@@ -214,11 +220,11 @@ const app = new Hono()
           abortController,
         });
         } finally {
-          activeResumeSessionIds.delete(sessionId);
+          activeSessionIds.delete(sessionId);
         }
       },
       async (err, stream) => {
-        activeResumeSessionIds.delete(sessionId);
+        activeSessionIds.delete(sessionId);
         const message = err instanceof Error ? err.message : String(err);
         const errorEvent: ChatStreamEvent = { type: "error", message };
         await stream.writeSSE({
@@ -228,7 +234,7 @@ const app = new Hono()
       },
     );
     } catch (error) {
-      activeResumeSessionIds.delete(sessionId);
+      activeSessionIds.delete(sessionId);
       throw error;
     }
   })
@@ -245,6 +251,12 @@ const app = new Hono()
     }
 
     const data = c.req.valid("json");
+
+    if (activeSessionIds.has(sessionId)) {
+      return c.json({ error: "Session already has an active request" }, 409);
+    }
+
+    activeSessionIds.add(sessionId);
 
     await db.message.create({
       data: {
@@ -275,15 +287,20 @@ const app = new Hono()
           abortController.abort();
         });
 
-        await streamAIResponse(stream, {
-          sessionId,
-          model: data.model,
-          history,
-          mode: data.mode,
-          abortController,
-        });
+        try {
+          await streamAIResponse(stream, {
+            sessionId,
+            model: data.model,
+            history,
+            mode: data.mode,
+            abortController,
+          });
+        } finally {
+          activeSessionIds.delete(sessionId);
+        }
       },
       async (err, stream) => {
+        activeSessionIds.delete(sessionId);
         const message = err instanceof Error ? err.message : String(err);
         const errorEvent: ChatStreamEvent = { type: "error", message };
         await stream.writeSSE({

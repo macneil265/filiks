@@ -4,7 +4,7 @@ export type ModelPricing = {
 };
 
 
-export type SupportedProvider = "anthropic" | "openai" | "openrouter" | "groq";
+export type SupportedProvider = "anthropic" | "openai" | "openrouter";
 
 type SupportedChatModeDefinition = {
     id: string,

@@ -16,7 +16,7 @@
 - [x] Screen routing (Home, NewSession, Session)
 - [x] Input bar with command menu, keyboard layers
 - [x] Message rendering (user, bot, error)
-- [x] 16 color themes with context provider
+- [x] 20 color themes with context provider
 - [x] Dialog system, toast notifications
 - [x] Hono RPC client for typed API calls
 
@@ -57,10 +57,8 @@
 - **Session search**: Full-text search across sessions and messages
 - **Multi-session tabs**: Switch between active sessions
 - **Export**: Share chat logs, generate PR descriptions from session context
-- **Improved interruption**: Save partial assistant response as INTERRUPTED when user stops mid-stream, so resume can continue from where it left off
 
 ## Known Issues
 
-- `abortController.signal` used in a boolean context on line 82 of `chat.ts` — always truthy (an `AbortSignal` object). Should be `.aborted`. Currently causes the handler to return early before saving the assistant message on success.
 - No API key validation at startup — missing keys cause runtime errors on first LLM call
 - `.env.example` has incomplete variable list (missing `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`)

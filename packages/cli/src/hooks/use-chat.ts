@@ -9,8 +9,6 @@ import {
   chatStreamEventSchema,
   type SupportedChatModelId,
 } from "@filiks/shared";
-import { requestId } from "hono/request-id";
-import { unknown } from "zod";
 
 export type ClientMessagePart = { type: "text"; text: string };
 
@@ -126,7 +124,7 @@ export function useChat(sessionId: string, initialMessages: Message[]) {
           interrupted: true,
         },
       ]);
-    }, []);
+    }, [updateMessages]);
 
   const clearStream = useCallback(
     (requestId: string) => {

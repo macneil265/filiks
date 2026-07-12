@@ -36,7 +36,7 @@ Defined in `models.ts`. Single registry of supported models:
 ```ts
 SUPPORTED_CHAT_MODELS: readonly {
   id: string
-  provider: "anthropic" | "openai"
+  provider: "anthropic" | "openai" | "openrouter"
   pricing: { inputUsdPerMillionTokens, outputUsdPerMillionTokens }
 }[]
 ```
@@ -44,8 +44,8 @@ SUPPORTED_CHAT_MODELS: readonly {
 Exported types:
 - `SupportedChatModel` — union of all model objects
 - `SupportedChatModelId` — union of model ID strings
-- `SupportedProvider` — `"anthropic" | "openai"`
+- `SupportedProvider` — `"anthropic" | "openai" | "openrouter"`
 
 Utilities:
 - `findSupportedChatModel(modelId)` — lookup by ID, returns object or undefined
-- `DEFAULT_CHAT_MODEL_ID` — `"claude-opus-4-6"`
+- `DEFAULT_CHAT_MODEL_ID` — `"nvidia/nemotron-3-super-120b-a12b:free"`

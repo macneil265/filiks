@@ -27,7 +27,7 @@ Get session with full message history.
   "title": "Fix the login bug",
   "cwd": "/home/user/project",
   "createdAt": "...",
-  "UpdatedAt": "...",
+  "updatedAt": "...",
   "messages": [
     { "id": "...", "role": "USER", "content": "Fix this bug", "model": "claude-opus-4-6", "mode": "BUILD", "status": "COMPLETE", "createdAt": "..." },
     { "id": "...", "role": "ASSISTANT", "content": "Here's the fix...", "model": "claude-opus-4-6", "mode": "BUILD", "status": "COMPLETE", "duration": 15, "createdAt": "..." }
@@ -88,6 +88,14 @@ Resume streaming for the last user message (no new input needed). Useful for aut
 **Response `409`:**
 ```json
 { "error": "Session has no pending user message to resume" }
+```
+
+```json
+{ "error": "Session uses unsupported model: <model>" }
+```
+
+```json
+{ "error": "Session already has an active resume" }
 ```
 
 ## Sentry
