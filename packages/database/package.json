@@ -7,7 +7,7 @@
         "./client": "./src/client.ts",
         "./enums": "./src/enums.ts"
     },
-    "scrips": {
+    "scripts": {
         "db:generate": "bun x prisma generate"
     },
     "devDependencies": {
