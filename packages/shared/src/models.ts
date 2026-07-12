@@ -4,8 +4,7 @@ export type ModelPricing = {
 };
 
 
-// You can able to wire other providers later e.g google and the rest
-export type SupportedProvider = "anthropic" | "openai";
+export type SupportedProvider = "anthropic" | "openai" | "openrouter" | "groq";
 
 type SupportedChatModeDefinition = {
     id: string,
@@ -79,6 +78,38 @@ export const SUPPORTED_CHAT_MODELS = [
             outputUsdPerMillionTokens: 1.5,
         },
     },
+    {
+        id: "nvidia/nemotron-3-super-120b-a12b:free",
+        provider: "openrouter",
+        pricing: {
+            inputUsdPerMillionTokens: 0,
+            outputUsdPerMillionTokens: 0,
+        },
+    },
+    {
+        id: "deepseek/deepseek-chat",
+        provider: "openrouter",
+        pricing: {
+            inputUsdPerMillionTokens: 0,
+            outputUsdPerMillionTokens: 0,
+        },
+    },
+    {
+        id: "meta-llama/llama-3.2-3b-instruct:free",
+        provider: "openrouter",
+        pricing: {
+            inputUsdPerMillionTokens: 0,
+            outputUsdPerMillionTokens: 0,
+        },
+    },
+    {
+        id: "qwen/qwen-2.5-7b-instruct:free",
+        provider: "openrouter",
+        pricing: {
+            inputUsdPerMillionTokens: 0,
+            outputUsdPerMillionTokens: 0,
+        },
+    },
 ] as const satisfies readonly SupportedChatModeDefinition[];
 
 export type SupportedChatModel = (typeof SUPPORTED_CHAT_MODELS) [number];
@@ -88,4 +119,4 @@ export function findSupportedChatModel(modelId: string) {
     return SUPPORTED_CHAT_MODELS.find((model) => model.id === modelId);
 }
 
-export const DEFAULT_CHAT_MODEL_ID: SupportedChatModelId = "claude-opus-4-6";
+export const DEFAULT_CHAT_MODEL_ID: SupportedChatModelId = "nvidia/nemotron-3-super-120b-a12b:free";
