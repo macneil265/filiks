@@ -34,14 +34,14 @@ import type { Command } from "./types";
     },
     {
         name: "session",
-        description: "Browser past sessions",
+        description: "Browse past sessions",
         value: "/sessions",
         action: (ctx) => {
                 ctx.toast.show({ message: "Loading Sessions..."});
             },
     },
     {
-        name: "theme",
+        name: "themes",
         description: "Change color theme",
         value: "/theme",
         action: (ctx) => {
