@@ -24,17 +24,23 @@ export function createBashTool(cwd: string) {
           env: { ...process.env, TERM: "dumb" },
         });
 
+        let timedOut = false;
         const timer = setTimeout(() => {
+          timedOut = true;
           proc.kill();
         }, timeout);
 
         const [stdout, stderr] = await Promise.all([
           new Response(proc.stdout).text(),
           new Response(proc.stderr).text(),
-        ]);
+        ]).catch(() => ["", ""] as const);
 
-        const exitCode = await proc.exited;
+        const exitCode = await proc.exited.catch(() => null);
         clearTimeout(timer);
+
+        if (timedOut) {
+          return { error: `Command timed out after ${timeout}ms` };
+        }
 
         const truncate = (s: string) =>
           s.length > MAX_OUTPUT
@@ -45,7 +51,7 @@ export function createBashTool(cwd: string) {
         return {
           stdout: truncate(stdout),
           stderr: truncate(stderr),
-          exitCode,
+          exitCode: exitCode ?? -1,
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
