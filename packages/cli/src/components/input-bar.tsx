@@ -192,7 +192,7 @@ export function InputBar({ onSubmit, disabled }: Props) {
             focused={!disabled && (isTopLayer("base") || isTopLayer("command"))}
             keyBindings={TEXTAREA_KEY_BINDINGS}
             onContentChange={handleTextareaContentChange}
-            placeholder={`Ask anything... "Fix a bug in the database`}
+            placeholder={`Ask anything... Fix a bug in the database`}
           />
           <StatusBar />
         </box>

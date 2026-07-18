@@ -29,3 +29,6 @@ const renderer = await createCliRenderer({
   exitOnCtrlC: false,
 });
 createRoot(renderer).render(<App />);
+
+// Set terminal window/tab title
+process.stdout.write("\x1b]0;Filiks\x07");

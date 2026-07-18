@@ -9,7 +9,7 @@ export {
 } from "./models";
 
 export {
-    tooCallArgsSchema,
+    toolCallArgsSchema,
     messagePartSchema,
     messagePartsSchema,
     chatStreamEventSchema,
