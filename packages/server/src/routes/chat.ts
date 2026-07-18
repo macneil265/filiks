@@ -35,24 +35,73 @@ const submitValidator = zValidator("json", submitSchema, (result, c) => {
 const activeSessionIds = new Set<string>();
 const MAX_STREAM_MS = 120_000;
 
-// Strip error messages and empty assistant messages from the conversation
 function buildConversationHistory(
   messages: {
     role: "USER" | "ASSISTANT" | "ERROR";
     content: string;
     status: MessageStatus;
+    parts?: Prisma.JsonValue | null;
   }[],
 ) {
-  return messages.flatMap((m) => {
-    if (m.role === "ERROR") return [];
-    if (m.role === "ASSISTANT" && m.content.length === 0) return [];
-    return [
-      {
-        role: m.role === "USER" ? ("user" as const) : ("assistant" as const),
-        content: m.content,
-      },
-    ];
-  });
+  const result: HistoryMessage[] = [];
+
+  for (const m of messages) {
+    if (m.role === "ERROR") continue;
+
+    if (m.role === "USER") {
+      result.push({ role: "user", content: m.content });
+      continue;
+    }
+
+    if (m.content.length === 0 && (!m.parts || !Array.isArray(m.parts) || m.parts.length === 0)) {
+      continue;
+    }
+
+    const parts = m.parts ? messagePartsSchema.parse(m.parts) : [];
+    const toolCalls = parts.filter(
+      (p): p is Extract<messagePart, { type: "tool-call" }> => p.type === "tool-call",
+    );
+    const textParts = parts.filter(
+      (p): p is Extract<messagePart, { type: "text" }> => p.type === "text",
+    );
+
+    if (toolCalls.length === 0) {
+      result.push({ role: "assistant", content: m.content });
+      continue;
+    }
+
+    const assistantContent: Array<Record<string, unknown>> = [];
+    if (textParts.length > 0) {
+      assistantContent.push({ type: "text", text: textParts.map((t) => t.text).join("") });
+    }
+    for (const tc of toolCalls) {
+      assistantContent.push({
+        type: "tool-call",
+        toolCallId: tc.id,
+        toolName: tc.name,
+        args: tc.args,
+      });
+    }
+
+    result.push({ role: "assistant", content: assistantContent });
+
+    for (const tc of toolCalls) {
+      if (tc.result != null) {
+        result.push({
+          role: "tool",
+          content: [{
+            type: "tool-result",
+            toolCallId: tc.id,
+            toolName: tc.name,
+            args: tc.args,
+            result: tc.result,
+          }],
+        });
+      }
+    }
+  }
+
+  return result;
 };
 
 function getResumableUserMessage(
@@ -68,11 +117,16 @@ function getResumableUserMessage(
 }
 
 
+type HistoryMessage =
+  | { role: "user"; content: string }
+  | { role: "assistant"; content: string | Array<Record<string, unknown>> }
+  | { role: "tool"; content: Array<Record<string, unknown>> };
+
 type StreamParams = {
   sessionId: string;
   model: string;
   cwd: string | null;
-  history: { role: "user" | "assistant" | "system"; content: string }[];
+  history: HistoryMessage[];
   mode: Mode;
   abortController: AbortController;
 };
@@ -88,9 +142,13 @@ async function streamAIResponse(
   const resolvedModel = resolveChatModel(model);
   
 
-  // Guard against stalled provider responses
-  const timeoutSignal = AbortSignal.timeout(MAX_STREAM_MS);
-  timeoutSignal.addEventListener("abort", () => abortController.abort(), { once: true });
+  // Guard against stalled provider responses — deadline extends on each stream part
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  function resetStallTimeout() {
+    clearTimeout(timeoutHandle);
+    timeoutHandle = setTimeout(() => abortController.abort(), MAX_STREAM_MS);
+  }
+  resetStallTimeout();
 
   const persistInterruptedMessage = async () => {
     const fullText = parts
@@ -124,7 +182,7 @@ async function streamAIResponse(
     const result = aiStreamText({
       model: resolvedModel.model,
       system: buildSystemPrompt({ cwd, mode }),
-      messages: history,
+      messages: history as never,
       tools,
       stopWhen: tools ? stepCountIs(50) : undefined,
       abortSignal: abortController.signal,
@@ -132,6 +190,7 @@ async function streamAIResponse(
     });
 
     for await (const part of result.fullStream) {
+      resetStallTimeout();
       if (stream.aborted) break;
 
       if (part.type === "reasoning-delta") {
@@ -207,6 +266,7 @@ async function streamAIResponse(
         throw part.error;
       }
     }
+    clearTimeout(timeoutHandle);
     if (stream.aborted || abortController.signal.aborted) {
       await persistInterruptedMessage();
       return;
@@ -241,6 +301,7 @@ async function streamAIResponse(
 
     await stream.writeSSE({ event: "done", data: JSON.stringify(doneEvent) });
   } catch (err) {
+    clearTimeout(timeoutHandle);
     if (abortController.signal.aborted) {
       await persistInterruptedMessage();
       return;

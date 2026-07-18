@@ -46,44 +46,58 @@ export function createGrepTool(cwd: string) {
           stderr: "pipe",
           cwd,
         });
-        
-        const stdout = await new Response(proc.stdout).text();
-        const stderr = await new Response(proc.stderr).text();
 
+        const reader = proc.stdout.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        const matches: { file: string; line: number; content: string }[] = [];
+        let truncated = false;
+        let totalLines = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            totalLines++;
+            if (matches.length >= MAX_MATCHES) {
+              truncated = true;
+              proc.kill();
+              break;
+            }
+
+            const m = line.match(/^(.+?):(\d+):(.*)$/);
+            if (m) {
+              matches.push({
+                file: relative(cwd, m[1]!),
+                line: parseInt(m[2]!, 10),
+                content: m[3]!,
+              });
+            }
+          }
+          if (truncated) break;
+        }
+
+        reader.releaseLock();
+
+        const stderr = await new Response(proc.stderr).text();
         await proc.exited;
 
-        // grep exits with 1 when no matches found - not an error
         if (proc.exitCode !== 0 && proc.exitCode !== 1) {
-          return {error: `grep failed: ${stderr.trim()}`};
+          return { error: `grep failed: ${stderr.trim()}` };
         }
 
-        if (!stdout.trim()) {
-          return {matches: [], message: "No matches found"};
+        if (matches.length === 0 && !buffer.trim()) {
+          return { matches: [], message: "No matches found" };
         }
 
-        const lines = stdout.trim().split("\n");
-        const matches: {file: string; line: number; content: string} [] = [];
-        let truncated = false;
-
-        for (const line of lines) {
-          if (matches.length >= MAX_MATCHES) {
-            truncated = true;
-            break;
-          }
-
-          // grep output format: /absolute/path:linenum:content
-          const match = line.match(/^(.+?):(\d+):(.*)$/);
-          if (match) {
-            matches.push({
-              file: relative(cwd, match[1]!),
-              line: parseInt(match[2]!, 10),
-              content: match[3]!,
-            })
-          }
-        }
         return {
           matches,
-          ...(truncated ? {truncated: true, totalMatches: lines.length}: {}),
+          ...(truncated ? { truncated: true, totalMatches: totalLines } : {}),
         };
 
         } catch (err) {

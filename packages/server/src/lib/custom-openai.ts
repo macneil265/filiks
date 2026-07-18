@@ -26,6 +26,28 @@ type OpenAIMessage = {
   tool_call_id?: string;
 };
 
+function extractToolResultContent(
+  output: { type: string; value?: unknown; reason?: string },
+): string {
+  if (output.type === "text" || output.type === "error-text") {
+    return (output as { value: string }).value;
+  }
+  if (output.type === "json" || output.type === "error-json") {
+    return JSON.stringify((output as { value: unknown }).value);
+  }
+  if (output.type === "execution-denied") {
+    return (output as { reason?: string }).reason || "Execution denied";
+  }
+  if (output.type === "content") {
+    const parts = (output as { value: Array<{ type: string; text?: string }> }).value;
+    return parts
+      .filter((p) => p.type === "text")
+      .map((p) => p.text)
+      .join("");
+  }
+  return "";
+}
+
 function convertPrompt(prompt: LanguageModelV4Prompt): OpenAIMessage[] {
   const messages: OpenAIMessage[] = [];
   for (const msg of prompt) {
@@ -44,7 +66,7 @@ function convertPrompt(prompt: LanguageModelV4Prompt): OpenAIMessage[] {
         break;
       }
       case "assistant": {
-        const parts = msg.content as Array<{ type: string; text?: string; toolCallId?: string; toolName?: string; args?: object }>;
+        const parts = msg.content as Array<{ type: string; text?: string; toolCallId?: string; toolName?: string; args?: object; input?: unknown }>;
         const text = parts
           .filter((p) => p.type === "text")
           .map((p) => (p as { text: string }).text)
@@ -52,42 +74,85 @@ function convertPrompt(prompt: LanguageModelV4Prompt): OpenAIMessage[] {
         const toolCalls = parts
           .filter((p) => p.type === "tool-call")
           .map((p) => {
-            const tc = p as { toolCallId: string; toolName: string; args: object };
+            const tc = p as { toolCallId: string; toolName: string; input: unknown };
             return {
               id: tc.toolCallId,
               type: "function" as const,
               function: {
                 name: tc.toolName,
-                arguments: JSON.stringify(tc.args),
+                arguments:
+                  tc.input != null && tc.input !== ""
+                    ? typeof tc.input === "string"
+                      ? tc.input
+                      : JSON.stringify(tc.input)
+                    : "{}",
               },
             };
           });
         messages.push({
           role: "assistant",
-          content: text || "",
+          content: toolCalls.length > 0 ? null : (text || null),
           ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
         });
         break;
       }
       case "tool": {
-        const parts = msg.content as Array<{ type: string; toolCallId?: string; result?: unknown }>;
+        const parts = msg.content as Array<{ type: string; toolCallId?: string; output?: { type: string; value?: unknown; reason?: string } }>;
         const toolResult = parts[0] as
-          | { type: "tool-result"; toolCallId: string; result: unknown }
+          | { type: "tool-result"; toolCallId: string; output: { type: string; value?: unknown; reason?: string } }
           | undefined;
+
         messages.push({
           role: "tool",
           tool_call_id: toolResult?.toolCallId ?? "",
-          content: toolResult
-            ? typeof toolResult.result === "string"
-              ? toolResult.result
-              : JSON.stringify(toolResult.result)
-            : "",
+          content: toolResult?.output ? extractToolResultContent(toolResult.output) : "",
         });
         break;
       }
     }
   }
-  return messages;
+
+  // Safety: ensure tool results match tool calls. If the SDK's internal
+  // validation misses a case, pad missing results so the upstream doesn't 400.
+  const toolResultMap = new Map<string, OpenAIMessage>();
+  for (const msg of messages) {
+    if (msg.role === "tool" && msg.tool_call_id) {
+      toolResultMap.set(msg.tool_call_id, msg);
+    }
+  }
+
+  const result: OpenAIMessage[] = [];
+  let pendingToolCallIds: string[] = [];
+  for (const msg of messages) {
+    if (msg.tool_calls) {
+      // Flush any orphaned tool calls from the previous batch before overwriting
+      for (const id of pendingToolCallIds) {
+        const existing = toolResultMap.get(id);
+        if (existing && existing.role === "tool") {
+          result.push(existing);
+        } else {
+          result.push({ role: "tool", tool_call_id: id, content: "" });
+        }
+      }
+      pendingToolCallIds = msg.tool_calls.map((tc) => tc.id);
+    }
+    result.push(msg);
+    if (msg.role === "tool" && msg.tool_call_id) {
+      pendingToolCallIds = pendingToolCallIds.filter((id) => id !== msg.tool_call_id);
+    }
+  }
+
+  // Flush remaining orphaned tool calls
+  for (const id of pendingToolCallIds) {
+    const existing = toolResultMap.get(id);
+    if (existing && existing.role === "tool") {
+      result.push(existing);
+    } else {
+      result.push({ role: "tool", tool_call_id: id, content: "" });
+    }
+  }
+
+  return result;
 }
 
 function convertTools(
@@ -101,14 +166,20 @@ function convertTools(
     strict?: boolean;
   };
 }> {
-  return tools.map((t) => ({
-    type: "function" as const,
-    function: {
-      name: t.name,
-      description: t.description,
-      parameters: t.inputSchema as Record<string, unknown>,
-    },
-  }));
+  return tools.map((t) => {
+    const params = { ...(t.inputSchema as Record<string, unknown>) };
+    delete params.$schema;
+    delete params.additionalProperties;
+    delete params.definitions;
+    return {
+      type: "function" as const,
+      function: {
+        name: t.name,
+        description: t.description,
+        parameters: params,
+      },
+    };
+  });
 }
 
 function mapFinishReason(
@@ -158,17 +229,19 @@ export function createCustomOpenAIModel(
       const { prompt, tools, toolChoice, abortSignal, includeRawChunks, ...rest } = options;
       const messages = convertPrompt(prompt);
 
+      if (!config.apiKey) {
+        throw new Error(`${config.name}: API key is not configured`);
+      }
+
       const bodyObj: Record<string, unknown> = {
         model: modelId,
         messages,
         stream: true,
-        stream_options: { include_usage: true },
       };
 
       if (rest.maxOutputTokens != null) bodyObj.max_tokens = rest.maxOutputTokens;
       if (rest.temperature != null) bodyObj.temperature = rest.temperature;
       if (rest.topP != null) bodyObj.top_p = rest.topP;
-      if (rest.topK != null) bodyObj.top_k = rest.topK;
       if (rest.stopSequences != null && rest.stopSequences.length > 0)
         bodyObj.stop = rest.stopSequences;
       if (rest.presencePenalty != null) bodyObj.presence_penalty = rest.presencePenalty;
@@ -192,20 +265,31 @@ export function createCustomOpenAIModel(
       }
 
       const body = JSON.stringify(bodyObj);
-      const response = await fetch(`${config.baseURL}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${config.apiKey}`,
-        },
-        body,
-        signal: abortSignal,
-      });
+      let response: Response;
+      try {
+        response = await fetch(`${config.baseURL}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${config.apiKey}`,
+            Accept: "text/event-stream",
+            "User-Agent": "filiks/1.0",
+          },
+          body,
+          signal: abortSignal,
+        });
+      } catch (err) {
+        throw new Error(
+          `${config.name}: connection failed — ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => "");
+        console.error(`[${config.name} doStream] 400 body sent:`, JSON.stringify(bodyObj));
+        console.error(`[${config.name} doStream] 400 response:`, errorText);
         throw new Error(
-          `API error (${response.status}): ${errorText || response.statusText}`,
+          `${config.name} API error (${response.status}): ${errorText || response.statusText}`,
         );
       }
 
@@ -359,6 +443,7 @@ export function createCustomOpenAIModel(
                     },
                     providerMetadata: undefined,
                   });
+                  controller.close();
                   return;
                 }
               }
@@ -392,8 +477,9 @@ export function createCustomOpenAIModel(
               },
               providerMetadata: undefined,
             });
+            controller.close();
           } catch (err) {
-            controller.enqueue({ type: "error", error: err });
+            controller.error(err);
           } finally {
             try {
               reader.releaseLock();
@@ -414,6 +500,10 @@ export function createCustomOpenAIModel(
     ): Promise<LanguageModelV4GenerateResult> {
       const { prompt, tools, toolChoice, abortSignal, ...rest } = options;
       const messages = convertPrompt(prompt);
+
+      if (!config.apiKey) {
+        throw new Error(`${config.name}: API key is not configured`);
+      }
 
       const bodyObj: Record<string, unknown> = {
         model: modelId,
@@ -442,20 +532,31 @@ export function createCustomOpenAIModel(
       }
 
       const body = JSON.stringify(bodyObj);
-      const response = await fetch(`${config.baseURL}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${config.apiKey}`,
-        },
-        body,
-        signal: abortSignal,
-      });
+      let response: Response;
+      try {
+        response = await fetch(`${config.baseURL}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${config.apiKey}`,
+            Accept: "application/json",
+            "User-Agent": "filiks/1.0",
+          },
+          body,
+          signal: abortSignal,
+        });
+      } catch (err) {
+        throw new Error(
+          `${config.name}: connection failed — ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => "");
+        console.error(`[${config.name} doGenerate] 400 body sent:`, JSON.stringify(bodyObj));
+        console.error(`[${config.name} doGenerate] 400 response:`, errorText);
         throw new Error(
-          `API error (${response.status}): ${errorText || response.statusText}`,
+          `${config.name} API error (${response.status}): ${errorText || response.statusText}`,
         );
       }
 
