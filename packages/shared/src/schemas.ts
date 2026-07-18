@@ -2,7 +2,7 @@ import { z } from "zod";
 
 //keep the explicit key schema here because the one argument z.record(...) form
 // does not type check cleanly with the Zod typings used in this workspace
-export const tooCallArgsSchema = z.record(z.string(), z.json());
+export const toolCallArgsSchema = z.record(z.string(), z.json());
 
 export const messagePartSchema = z.discriminatedUnion("type", [
   z.object({
@@ -10,10 +10,10 @@ export const messagePartSchema = z.discriminatedUnion("type", [
     text: z.string(),
   }),
   z.object({
-    type: z.literal("too-call"),
+    type: z.literal("tool-call"),
     id: z.string(),
     name: z.string(),
-    args: tooCallArgsSchema,
+    args: toolCallArgsSchema,
     result: z.string().optional(),
   }),
   z.object({
@@ -41,7 +41,7 @@ export const chatStreamEventSchema = z.discriminatedUnion("type", [
     type: z.literal("tool-call"),
     toolCallId: z.string(),
     toolName: z.string(),
-    args: tooCallArgsSchema,
+    args: toolCallArgsSchema,
   }),
   z.object({
     type: z.literal("tool-call-result"),

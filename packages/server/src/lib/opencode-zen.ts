@@ -6,13 +6,13 @@ dotenv.config({
   path: path.resolve(import.meta.dirname, "../../../../.env"),
 });
 
-const apiKey = process.env.OPENROUTER_API_KEY ?? "";
+const apiKey = process.env.OPENCODE_ZEN_API_KEY ?? "";
 
-export const openrouter = {
+export const opencodeZen = {
   chat: (modelId: string) =>
     createCustomOpenAIModel(modelId, {
-      baseURL: "https://openrouter.ai/api/v1",
+      baseURL: "https://opencode.ai/zen/v1",
       apiKey,
-      name: "openrouter",
+      name: "opencode-zen",
     }),
 };

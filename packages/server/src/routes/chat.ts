@@ -2,11 +2,22 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { streamText as aiStreamText } from "ai";
+import { streamText as aiStreamText, stepCountIs } from "ai";
 import { db } from "@filiks/database/client";
 import { Mode, MessageStatus } from "@filiks/database/enums";
-import { type ChatStreamEvent } from "@filiks/shared";
+import type {Prisma} from "@filiks/database";
+import { 
+   type ChatStreamEvent,
+   type messagePart,
+   toolCallArgsSchema,
+   messagePartsSchema,
+
+
+ } from "@filiks/shared";
+ import {createTools} from "../tools";
+ import { buildSystemPrompt } from "../system-prompt";
 import { isSupportedChatModel, resolveChatModel } from "../lib/models";
+
 
 const submitSchema = z.object({
   content: z.string().min(1),
@@ -45,7 +56,7 @@ function buildConversationHistory(
 };
 
 function getResumableUserMessage(
-  messages: {role: "USER" | "ASSISTANT" | "ERROR"; 
+  messages: {role: "USER" | "ASSISTANT" | "ERROR";
     model: string; mode: Mode
    } [],
 ) {
@@ -60,7 +71,8 @@ function getResumableUserMessage(
 type StreamParams = {
   sessionId: string;
   model: string;
-  history: { role: "user" | "assistant"; content: string }[];
+  cwd: string | null;
+  history: { role: "user" | "assistant" | "system"; content: string }[];
   mode: Mode;
   abortController: AbortController;
 };
@@ -69,19 +81,31 @@ async function streamAIResponse(
   stream: Parameters<Parameters<typeof streamSSE>[1]>[0],
   params: StreamParams,
 ) {
-  const { sessionId, model, history, mode, abortController } = params;
+  const { sessionId, model, cwd, history, mode, abortController } = params;
   const startTime = Date.now();
+  const tools = cwd ? createTools(cwd, mode) : undefined;
+  const parts: messagePart[] = [];
   const resolvedModel = resolveChatModel(model);
-  let fullText = "";
+  
 
   // Guard against stalled provider responses
   const timeoutSignal = AbortSignal.timeout(MAX_STREAM_MS);
   timeoutSignal.addEventListener("abort", () => abortController.abort(), { once: true });
 
   const persistInterruptedMessage = async () => {
-    if (fullText.length === 0) return;
+    const fullText = parts
+      .filter((p) => p.type === "text")
+      .map((p) => p.text)
+      .join("");
+
+      if (fullText.length === 0 && parts.length === 0) {
+        return;
+      }
     
     const elapsedMs = Date.now() - startTime;
+    const validatedParts: Prisma.InputJsonValue | undefined = parts.length > 0 ? messagePartsSchema.parse(parts) : undefined;
+    
+
     await db.message.create({
       data: {
         SessionId: sessionId,
@@ -89,30 +113,96 @@ async function streamAIResponse(
         status: MessageStatus.INTERRUPTED,
         model,
         content: fullText,
+        parts: validatedParts,
         mode,
         duration: Math.round(elapsedMs / 1000),
       },
     });
   };
 
-  try {
+   try {
     const result = aiStreamText({
       model: resolvedModel.model,
+      system: buildSystemPrompt({ cwd, mode }),
       messages: history,
+      tools,
+      stopWhen: tools ? stepCountIs(50) : undefined,
       abortSignal: abortController.signal,
+      providerOptions: resolvedModel.providerOptions,
     });
 
     for await (const part of result.fullStream) {
       if (stream.aborted) break;
 
+      if (part.type === "reasoning-delta") {
+        const last = parts[parts.length - 1];
+        if (last && last.type === "reasoning") {
+          last.text += part.text;
+        } else {
+          parts.push({type: "reasoning", text: part.text});
+        }
+        const event: ChatStreamEvent = {type: "reasoning-delta", text: part.text};
+        await stream.writeSSE({
+          event: "reasoning-delta", 
+          data: JSON.stringify(event) });
+      }
+
       if (part.type === "text-delta") {
-        fullText += part.text;
+        const last = parts[parts.length - 1];
+        if (last && last.type === "text"){
+          last.text += part.text;
+        } else {
+          parts.push({type: "text", text: part.text})
+        };
+
         const event: ChatStreamEvent = { type: "text-delta", text: part.text };
         await stream.writeSSE({
           event: "text-delta",
           data: JSON.stringify(event),
         });
       }
+
+      if (part.type === "tool-call") {
+        const args = toolCallArgsSchema.parse(part.input);
+
+        parts.push({
+          type: "tool-call",
+          id: part.toolCallId,
+          name: part.toolName,
+          args,
+        });
+
+        const event: ChatStreamEvent = {
+          type: "tool-call",
+          toolCallId: part.toolCallId,
+          toolName: part.toolName,
+          args,
+        };
+        await stream.writeSSE({event: "tool-call", data: JSON.stringify(event)});
+      }
+
+      if (part.type === "tool-result"){
+        const resultStr = 
+        typeof part.output === "string" ? part.output : JSON.stringify(part.output);
+
+        const tcPart = parts.find(
+          (p): p is Extract<messagePart, {type: "tool-call"}> =>
+            p.type === "tool-call" && p.id === part.toolCallId,
+        );
+
+        if (tcPart) {
+         tcPart.result = resultStr;
+        }
+
+        const event: ChatStreamEvent = {
+          type: "tool-call-result",
+          toolCallId: part.toolCallId,
+          result: resultStr,
+        };
+
+        await stream.writeSSE({event: "tool-call-result", data: JSON.stringify(event)});
+      }
+
       if (part.type === "error") {
         throw part.error;
       }
@@ -122,6 +212,13 @@ async function streamAIResponse(
       return;
     }
     const elapsedMs = Date.now() - startTime;
+    const fullText = parts
+      .filter((p) => p.type === "text")
+      .map((p) => p.text)
+      .join("");
+
+      const validateParts: Prisma.InputJsonValue | undefined = 
+        parts.length > 0 ? messagePartsSchema.parse(parts) : undefined;
 
     const assistantMessage = await db.message.create({
       data: {
@@ -130,6 +227,7 @@ async function streamAIResponse(
         status: MessageStatus.COMPLETE,
         model,
         content: fullText,
+        parts: validateParts,
         mode,
         duration: Math.round(elapsedMs / 1000),
       },
@@ -215,6 +313,7 @@ const app = new Hono()
         await streamAIResponse(stream, {
           sessionId,
           model: resumableMessage.model,
+          cwd: session.cwd,
           history,
           mode: resumableMessage.mode,
           abortController,
@@ -258,57 +357,63 @@ const app = new Hono()
 
     activeSessionIds.add(sessionId);
 
-    await db.message.create({
-      data: {
-        SessionId: sessionId,
-        role: "USER",
-        status: MessageStatus.COMPLETE,
-        model: data.model,
-        content: data.content,
-        mode: data.mode,
-      },
-    });
+    try {
+      await db.message.create({
+        data: {
+          SessionId: sessionId,
+          role: "USER",
+          status: MessageStatus.COMPLETE,
+          model: data.model,
+          content: data.content,
+          mode: data.mode,
+        },
+      });
 
-    const history = buildConversationHistory([
-      ...session.messages, //TODO: limit to last 10, 5 messages?
-      {
-        role: "USER" as const,
-        content: data.content,
-        status: MessageStatus.COMPLETE,
-      },
-    ]);
+      const history = buildConversationHistory([
+        ...session.messages,
+        {
+          role: "USER" as const,
+          content: data.content,
+          status: MessageStatus.COMPLETE,
+        },
+      ]);
 
-    const abortController = new AbortController();
+      const abortController = new AbortController();
 
-    return streamSSE(
-      c,
-      async (stream) => {
-        stream.onAbort(() => {
-          abortController.abort();
-        });
-
-        try {
-          await streamAIResponse(stream, {
-            sessionId,
-            model: data.model,
-            history,
-            mode: data.mode,
-            abortController,
+      return streamSSE(
+        c,
+        async (stream) => {
+          stream.onAbort(() => {
+            abortController.abort();
           });
-        } finally {
+
+          try {
+            await streamAIResponse(stream, {
+              sessionId,
+              model: data.model,
+              cwd: session.cwd,
+              history,
+              mode: data.mode,
+              abortController,
+            });
+          } finally {
+            activeSessionIds.delete(sessionId);
+          }
+        },
+        async (err, stream) => {
           activeSessionIds.delete(sessionId);
-        }
-      },
-      async (err, stream) => {
-        activeSessionIds.delete(sessionId);
-        const message = err instanceof Error ? err.message : String(err);
-        const errorEvent: ChatStreamEvent = { type: "error", message };
-        await stream.writeSSE({
-          event: "error",
-          data: JSON.stringify(errorEvent),
-        });
-      },
-    );
+          const message = err instanceof Error ? err.message : String(err);
+          const errorEvent: ChatStreamEvent = { type: "error", message };
+          await stream.writeSSE({
+            event: "error",
+            data: JSON.stringify(errorEvent),
+          });
+        },
+      );
+    } catch (error) {
+      activeSessionIds.delete(sessionId);
+      throw error;
+    }
   });
 
 export default app;
