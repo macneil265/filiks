@@ -1,0 +1,81 @@
+import { useState, useCallback } from "react";
+import { useKeyboard } from "@opentui/react";
+import { TextAttributes } from "@opentui/core";
+import { useTheme } from "../../providers/theme";
+import { useKeyboardLayer } from "../../providers/keyboard-layer";
+import { getUser } from "../../lib/auth";
+import { SessionInfoPanel } from "./session-info-panel";
+import { ContextsPanel } from "./contexts-panel";
+import { TodoPanel } from "./todo-panel";
+import { MCPPanel } from "./mcp-panel";
+import { LSPPanel } from "./lsp-panel";
+import { Panel } from "./panel";
+import type { ClientMessagePart } from "../../hooks/use-chat";
+
+type SessionInfo = {
+  title: string;
+  createdAt: string;
+  cwd: string | null;
+};
+
+type Props = {
+  session: SessionInfo;
+  parts: ClientMessagePart[];
+  streaming: boolean;
+};
+
+const SIDEBAR_WIDTH = 48;
+
+export function Sidebar({ session, parts, streaming }: Props) {
+  const [visible, setVisible] = useState(true);
+  const { isTopLayer } = useKeyboardLayer();
+  const { colors } = useTheme();
+  const user = getUser();
+
+  useKeyboard(
+    useCallback(
+      (key) => {
+        if (!key.ctrl || key.name !== "b") return;
+        if (!isTopLayer("base")) return;
+        setVisible((v) => !v);
+      },
+      [isTopLayer],
+    ),
+  );
+
+  if (!visible) return null;
+
+  return (
+    <box flexDirection="column" flexShrink={0} width={SIDEBAR_WIDTH} height="100%">
+      <box
+        width="100%"
+        flexGrow={1}
+        flexDirection="column"
+        gap={1}
+        paddingX={1}
+        paddingY={1}
+        borderStyle="single"
+        borderColor={colors.dimSeparator}
+      >
+        <SessionInfoPanel title={session.title} createdAt={session.createdAt} />
+        {user && (
+          <Panel title="Account">
+            <text fg={colors.text}>
+              {user.name ?? user.email ?? user.id}
+            </text>
+          </Panel>
+        )}
+        <ContextsPanel />
+        <TodoPanel parts={parts} streaming={streaming} />
+        <MCPPanel />
+        <LSPPanel />
+      </box>
+      <box flexDirection="column" paddingX={1} paddingTop={1} gap={0}>
+        <text attributes={TextAttributes.DIM} fg={colors.dimSeparator}>
+          {session.cwd ?? process.cwd()}
+        </text>
+        <text fg={colors.textMuted}>Filiks 1.0.0</text>
+      </box>
+    </box>
+  );
+}

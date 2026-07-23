@@ -1,3 +1,5 @@
+import dotenv from "dotenv";
+import path from "path";
 import { anthropic } from "@ai-sdk/anthropic";
 import { openai } from "@ai-sdk/openai";
 import { google } from "@ai-sdk/google";
@@ -5,7 +7,9 @@ import { groq } from "@ai-sdk/groq";
 import { deepseek } from "@ai-sdk/deepseek";
 import { mistral } from "@ai-sdk/mistral";
 import { openrouter } from "./openrouter";
-import { opencodeZen } from "./opencode-zen";
+import { createCustomOpenAIModel } from "./custom-openai";
+import { providers as snapshotProviders } from "@opencode-ai/models/snapshot";
+import type { ProviderMap } from "@opencode-ai/models";
 import {
   findSupportedChatModel,
   type SupportedChatModel,
@@ -14,25 +18,14 @@ import {
 } from "@filiks/shared";
 import type { LanguageModel } from "ai";
 
+dotenv.config({
+  path: path.resolve(import.meta.dirname, "../../../../.env"),
+});
 
-type ProviderOptions = Record<string, any>;
+// Make ProviderMap accessible for iteration
+const providersMap = snapshotProviders as ProviderMap;
 
-type AnthropicModelId = Extract<
-  SupportedChatModel,
-  { provider: "anthropic" }
->["id"];
-type OpenAIModelId = Extract<SupportedChatModel, { provider: "openai" }>["id"];
-type OpenRouterModelId = Extract<
-  SupportedChatModel,
-  { provider: "openrouter" }
->["id"];
-
-type GoogleModelId = Extract<SupportedChatModel, { provider: "google" }>["id"];
-type GroqModelId = Extract<SupportedChatModel, { provider: "groq" }>["id"];
-type DeepSeekModelId = Extract<SupportedChatModel, { provider: "deepseek" }>["id"];
-type MistralModelId = Extract<SupportedChatModel, { provider: "mistral" }>["id"];
-
-type OpenCodeZenModelId = Extract<SupportedChatModel, { provider: "opencode-zen" }>["id"];
+export type ProviderOptions = Record<string, any>;
 
 export type ResolvedModel = {
   model: LanguageModel;
@@ -41,34 +34,22 @@ export type ResolvedModel = {
   providerOptions?: ProviderOptions;
 };
 
-const ANTHROPIC_PROVIDER_OPTIONS: Partial<Record<AnthropicModelId, ProviderOptions>> = {
+const PROVIDER_OPTIONS: Record<string, ProviderOptions | undefined> = {
   "claude-opus-4-6": {
     anthropic: {
-      thinking: {
-        type: "enabled",
-        budgetTokens: 10000,
-      }
+      thinking: { type: "enabled", budgetTokens: 10000 },
     },
   },
-    "claude-sonnet-4-6": {
+  "claude-sonnet-4-6": {
     anthropic: {
-      thinking: {
-        type: "enabled",
-        budgetTokens: 10000,
-      },
+      thinking: { type: "enabled", budgetTokens: 10000 },
     },
-    },
-    };
-
-const DEEPSEEK_PROVIDER_OPTIONS: Partial<Record<DeepSeekModelId, ProviderOptions>> = {
+  },
   "deepseek-reasoner": {
     deepseek: {
       thinking: { type: "enabled" },
     },
   },
-};
-
-const OPENAI_PROVIDER_OPTIONS: Partial<Record<OpenAIModelId, ProviderOptions>> = {
   "o3-mini": {
     openai: {
       thinking: { reasoningSummary: "detailed" },
@@ -79,9 +60,6 @@ const OPENAI_PROVIDER_OPTIONS: Partial<Record<OpenAIModelId, ProviderOptions>> =
       thinking: { reasoningSummary: "detailed" },
     },
   },
-};
-
-const OPENROUTER_PROVIDER_OPTIONS: Partial<Record<OpenRouterModelId, ProviderOptions>> = {
   "tencent/hy3:free": {
     openrouter: {
       reasoning_effort: "high",
@@ -89,102 +67,130 @@ const OPENROUTER_PROVIDER_OPTIONS: Partial<Record<OpenRouterModelId, ProviderOpt
   },
 };
 
-function assertUnsupportedProvider(provider: never): never {
-  throw new Error(`Unsupported provider: ${provider}`);
-}
+// Compatibility: old env var names that can satisfy a canonical models.dev env requirement
+const ENV_FALLBACKS: Record<string, string[]> = {
+  "OPENCODE_API_KEY": ["OPENCODE_ZEN_API_KEY"],
+};
 
-function resolveAnthropicModel(modelId: AnthropicModelId): ResolvedModel {
-  return {
-    model: anthropic(modelId),
-    provider: "anthropic",
-    modelId,
-    providerOptions: ANTHROPIC_PROVIDER_OPTIONS[modelId]
-  };
-}
-
-function resolveOpenAIModel(modelId: OpenAIModelId): ResolvedModel {
-  return {
-    model: openai(modelId),
-    provider: "openai",
-    modelId,
-    providerOptions: OPENAI_PROVIDER_OPTIONS[modelId],
-  };
-}
-
-function resolveOpenRouterModel(modelId: OpenRouterModelId): ResolvedModel {
-  return {
-    model: openrouter.chat(modelId),
-    provider: "openrouter",
-    modelId,
-    providerOptions: OPENROUTER_PROVIDER_OPTIONS[modelId],
-  };
-}
-
-function resolveGoogleModel(modelId: GoogleModelId): ResolvedModel {
-  return {
-    model: google(modelId),
-    provider: "google",
-    modelId,
-  };
-}
-
-function resolveGroqModel(modelId: GroqModelId): ResolvedModel {
-  return {
-    model: groq(modelId),
-    provider: "groq",
-    modelId,
-  };
-}
-
-function resolveDeepSeekModel(modelId: DeepSeekModelId): ResolvedModel {
-  return {
-    model: deepseek(modelId),
-    provider: "deepseek",
-    modelId,
-    providerOptions: DEEPSEEK_PROVIDER_OPTIONS[modelId],
-  };
-}
-
-function resolveMistralModel(modelId: MistralModelId): ResolvedModel {
-  return {
-    model: mistral(modelId),
-    provider: "mistral",
-    modelId,
-  };
-}
-
-function resolveOpenCodeZenModel(modelId: OpenCodeZenModelId): ResolvedModel {
-  return {
-    model: opencodeZen.chat(modelId),
-    provider: "opencode-zen",
-    modelId,
-    providerOptions: {},
-  };
-}
-
-function resolveSupportedChatModel(model: SupportedChatModel): ResolvedModel {
-  const provider = model.provider;
-
-  switch (provider) {
-    case "anthropic":
-      return resolveAnthropicModel(model.id);
-    case "openai":
-      return resolveOpenAIModel(model.id);
-    case "openrouter":
-      return resolveOpenRouterModel(model.id);
-    case "google":
-      return resolveGoogleModel(model.id);
-    case "groq":
-      return resolveGroqModel(model.id);
-    case "deepseek":
-      return resolveDeepSeekModel(model.id);
-    case "mistral":
-      return resolveMistralModel(model.id);
-    case "opencode-zen":
-      return resolveOpenCodeZenModel(model.id);
-    default:
-      return assertUnsupportedProvider(provider);
+// Check canonical and fallback env var names
+function resolveEnvVar(name: string): string | undefined {
+  if (process.env[name]) {
+    console.debug(`[models] resolved env var ${name} from process.env`);
+    return process.env[name];
   }
+  const fallbacks = ENV_FALLBACKS[name];
+  if (fallbacks) {
+    for (const fb of fallbacks) {
+      if (process.env[fb]) {
+        console.debug(`[models] resolved env var ${name} via fallback ${fb}`);
+        return process.env[fb];
+      }
+    }
+  }
+  return undefined;
+}
+
+// npm package -> resolver function
+type ModelResolver = (modelId: string, api?: string) => LanguageModel;
+
+const npmResolvers: Record<string, ModelResolver> = {
+  "@ai-sdk/anthropic": (id) => anthropic(id),
+  "@ai-sdk/openai": (id) => openai(id),
+  "@ai-sdk/google": (id) => google(id),
+  "@ai-sdk/groq": (id) => groq(id),
+  "@ai-sdk/deepseek": (id) => deepseek(id),
+  "@ai-sdk/mistral": (id) => mistral(id),
+  "@ai-sdk/openai-compatible": (id, api) => {
+    const providerInfo = findProviderForModel(id);
+    if (!providerInfo) throw new Error(`Cannot resolve provider for model: ${id}`);
+    const apiKey = getApiKey(providerInfo.env);
+    return createCustomOpenAIModel(id, {
+      baseURL: api || providerInfo.api || "",
+      apiKey,
+      name: providerInfo.providerId,
+    });
+  },
+};
+
+// Special handling for openrouter which uses a custom wrapper
+npmResolvers["@openrouter/ai-sdk-provider"] = (id) => openrouter.chat(id);
+
+function getApiKey(env: string[]): string {
+  for (const e of env) {
+    const val = resolveEnvVar(e);
+    if (val) return val;
+  }
+  console.warn(`[models] no API key found among: ${env.join(', ')}`);
+  return "";
+}
+
+interface ProviderInfo {
+  providerId: string;
+  npm: string;
+  api?: string;
+  env: string[];
+}
+
+const providerCache = new Map<string, ProviderInfo>();
+
+function findProviderForModel(modelId: string): ProviderInfo | undefined {
+  if (providerCache.has(modelId)) return providerCache.get(modelId);
+
+  let fallback: ProviderInfo | undefined;
+
+  for (const providerId of Object.keys(providersMap)) {
+    const provider = providersMap[providerId]!;
+    if (provider.models[modelId]) {
+      const info: ProviderInfo = {
+        providerId,
+        npm: provider.npm,
+        api: provider.api,
+        env: provider.env,
+      };
+      // Prefer a provider whose env vars we can satisfy
+      if (provider.env.some((e: string) => resolveEnvVar(e))) {
+        providerCache.set(modelId, info);
+        return info;
+      }
+      // First match as fallback if no provider has keys
+      if (!fallback) fallback = info;
+    }
+  }
+
+  if (fallback) providerCache.set(modelId, fallback);
+  return fallback;
+}
+
+function resolveModel(model: SupportedChatModel): ResolvedModel {
+  const providerInfo = findProviderForModel(model.id);
+
+  if (!providerInfo) {
+    throw new Error(`Cannot find provider for model: ${model.id}`);
+  }
+
+  // Check if we have at least one of the required env vars
+  const hasKey = providerInfo.env.some((e: string) => resolveEnvVar(e));
+  if (!hasKey) {
+    throw new Error(
+      `Missing API key for model "${model.id}". Requires one of: ${providerInfo.env.join(", ")}`,
+    );
+  }
+
+  const resolver = npmResolvers[providerInfo.npm];
+  if (!resolver) {
+    throw new Error(
+      `Unsupported AI SDK package "${providerInfo.npm}" for model "${model.id}"`,
+    );
+  }
+
+  const languageModel = resolver(model.id, providerInfo.api);
+
+  return {
+    model: languageModel,
+    provider: providerInfo.providerId,
+    modelId: model.id,
+    providerOptions: PROVIDER_OPTIONS[model.id],
+  };
 }
 
 export function isSupportedChatModel(
@@ -198,5 +204,16 @@ export function resolveChatModel(modelId: string): ResolvedModel {
   if (!model) {
     throw new Error(`Unsupported model: ${modelId}`);
   }
-  return resolveSupportedChatModel(model);
-};
+  return resolveModel(model);
+}
+
+export function getAvailableProviders(): string[] {
+  const available: string[] = [];
+  for (const providerId of Object.keys(providersMap)) {
+    const provider = providersMap[providerId]!;
+    if (provider.env.some((e: string) => resolveEnvVar(e))) {
+      available.push(providerId);
+    }
+  }
+  return available;
+}

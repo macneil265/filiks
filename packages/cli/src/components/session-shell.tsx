@@ -2,7 +2,15 @@ import { TextAttributes } from "@opentui/core";
 import type { ReactNode } from "react";
 import { InputBar } from "./input-bar";
 import { Spinner } from "./spinner";
+import { Sidebar } from "./sidebar";
 import { usePromptConfig } from "../providers/prompt-config";
+import type { ClientMessagePart } from "../hooks/use-chat";
+
+type SessionInfo = {
+  title: string;
+  createdAt: string;
+  cwd: string | null;
+};
 
 type Props = {
   children?: ReactNode;
@@ -10,6 +18,8 @@ type Props = {
   inputDisabled?: boolean;
   loading?: boolean;
   interruptible?: boolean;
+  parts?: ClientMessagePart[];
+  session?: SessionInfo | null;
 };
 
 export function SessionShell({
@@ -18,48 +28,60 @@ export function SessionShell({
   inputDisabled = false,
   loading = false,
   interruptible = false,
+  parts = [],
+  session,
 }: Props) {
 
   const {mode} = usePromptConfig();
 
   return (
     <box
-      flexDirection="column"
+      flexDirection="row"
       flexGrow={1}
       width="100%"
       height="100%"
-      paddingY={1}
-      paddingX={2}
-      gap={1}
     >
-      <scrollbox flexGrow={1} width="100%" stickyScroll stickyStart="bottom">
-        <box gap={1}>{children}</box>
-      </scrollbox>
-      <box flexShrink={0}>
-        <InputBar onSubmit={onSubmit} disabled={inputDisabled} />
-        <box
-          flexShrink={0}
-          flexDirection="row"
-          justifyContent="space-between"
-          width="100%"
-          height={1}
-          gap={2}
-          paddingLeft={1}
-        >
-          <box flexDirection="row" alignItems="center" gap={2}>
-            {loading ? (
-              <>
-                <Spinner mode={mode} />
-                {interruptible ? <text>esc to interrupt</text> : null}
-              </>
-            ) : null}
-          </box>
-          <box flexDirection="row" gap={1} flexShrink={0} marginLeft="auto">
-            <text>tab</text>
-            <text attributes={TextAttributes.DIM}>switch mode</text>
+      <box
+        flexDirection="column"
+        flexGrow={1}
+        width="100%"
+        height="100%"
+        paddingY={1}
+        paddingX={2}
+        gap={1}
+      >
+        <scrollbox flexGrow={1} width="100%" stickyScroll stickyStart="bottom">
+          <box gap={1}>{children}</box>
+        </scrollbox>
+        <box flexShrink={0}>
+          <InputBar onSubmit={onSubmit} disabled={inputDisabled} />
+          <box
+            flexShrink={0}
+            flexDirection="row"
+            justifyContent="space-between"
+            width="100%"
+            height={1}
+            gap={2}
+            paddingLeft={1}
+          >
+            <box flexDirection="row" alignItems="center" gap={2}>
+              {loading ? (
+                <>
+                  <Spinner mode={mode} />
+                  {interruptible ? <text>esc to interrupt</text> : null}
+                </>
+              ) : null}
+            </box>
+            <box flexDirection="row" gap={1} flexShrink={0} marginLeft="auto">
+              <text>ctrl+b</text>
+              <text attributes={TextAttributes.DIM}>board</text>
+              <text>tab</text>
+              <text attributes={TextAttributes.DIM}>switch mode</text>
+            </box>
           </box>
         </box>
       </box>
+      {session && <Sidebar session={session} parts={parts} streaming={loading} />}
     </box>
   );
 }

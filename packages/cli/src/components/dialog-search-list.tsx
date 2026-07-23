@@ -19,6 +19,8 @@ type DialogSearchListProps<T> = {
   getKey: (item: T) => string;
   placeholder?: string;
   emptyText?: string;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
 };
 
 export function DialogSearchList<T>({
@@ -30,24 +32,33 @@ export function DialogSearchList<T>({
   getKey,
   placeholder = "Search",
   emptyText = "No results",
+  searchValue: controlledSearchValue,
+  onSearchChange,
 }: DialogSearchListProps<T>) {
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [searchValue, setSearchValue] = useState("");
+  const [internalSearchValue, setInternalSearchValue] = useState("");
   const inputRef = useRef<InputRenderable>(null);
   const scrollRef = useRef<ScrollBoxRenderable>(null);
   const { isTopLayer } = useKeyboardLayer();
   const {colors} = useTheme();
 
+  const isControlled = controlledSearchValue !== undefined && onSearchChange !== undefined;
+  const searchValue = isControlled ? controlledSearchValue : internalSearchValue;
+
   const handleContentChange = useCallback(() => {
     const text = inputRef.current?.value ?? "";
-    setSearchValue(text);
+    if (isControlled) {
+      onSearchChange(text);
+    } else {
+      setInternalSearchValue(text);
+    }
     setSelectedIndex(0);
 
     const scrollbox = scrollRef.current;
     if (scrollbox) {
       scrollbox.scrollTo(0);
     }
-  }, []);
+  }, [isControlled, onSearchChange]);
 
   const filtered = searchValue
     ? items.filter((item) => filterFn(item, searchValue))

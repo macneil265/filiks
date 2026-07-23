@@ -17,7 +17,7 @@ export type CustomOpenAIConfig = {
 
 type OpenAIMessage = {
   role: "system" | "user" | "assistant" | "tool";
-  content: string | Array<{ type: "text"; text: string }>;
+  content: string | Array<{ type: "text"; text: string }> | null;
   tool_calls?: Array<{
     id: string;
     type: "function";
@@ -285,11 +285,16 @@ export function createCustomOpenAIModel(
       }
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => "");
-        console.error(`[${config.name} doStream] 400 body sent:`, JSON.stringify(bodyObj));
-        console.error(`[${config.name} doStream] 400 response:`, errorText);
+        const errorBody = await response.text().catch(() => "");
+        let errorDetail: string;
+        try {
+          const parsed = JSON.parse(errorBody);
+          errorDetail = parsed?.error?.message || errorBody;
+        } catch {
+          errorDetail = errorBody || response.statusText;
+        }
         throw new Error(
-          `${config.name} API error (${response.status}): ${errorText || response.statusText}`,
+          `${config.name} API error (${response.status}): ${errorDetail}`,
         );
       }
 
@@ -318,7 +323,7 @@ export function createCustomOpenAIModel(
 
           try {
             while (true) {
-              let result: ReadableStreamReadResult<Uint8Array>;
+              let result: ReadableStreamDefaultReadResult<Uint8Array>;
               try {
                 result = await reader.read();
               } catch (err) {
@@ -327,6 +332,7 @@ export function createCustomOpenAIModel(
                 return;
               }
               if (result.done) break;
+              if (abortSignal?.aborted) break;
 
               buffer += decoder.decode(result.value, { stream: true });
               const lines = buffer.split("\n");
@@ -340,7 +346,7 @@ export function createCustomOpenAIModel(
                   const errMsg =
                     (chunk.error as Record<string, unknown>)?.message as string ||
                     String(chunk.error);
-                  controller.enqueue({ type: "error", error: new Error(errMsg) });
+                  controller.error(new Error(errMsg));
                   return;
                 }
 
@@ -552,11 +558,16 @@ export function createCustomOpenAIModel(
       }
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => "");
-        console.error(`[${config.name} doGenerate] 400 body sent:`, JSON.stringify(bodyObj));
-        console.error(`[${config.name} doGenerate] 400 response:`, errorText);
+        const errorBody = await response.text().catch(() => "");
+        let errorDetail: string;
+        try {
+          const parsed = JSON.parse(errorBody);
+          errorDetail = parsed?.error?.message || errorBody;
+        } catch {
+          errorDetail = errorBody || response.statusText;
+        }
         throw new Error(
-          `${config.name} API error (${response.status}): ${errorText || response.statusText}`,
+          `${config.name} API error (${response.status}): ${errorDetail}`,
         );
       }
 
@@ -574,7 +585,7 @@ export function createCustomOpenAIModel(
       );
       const usage = data.usage as Record<string, unknown> | undefined;
 
-      const outputContent: Array<{ type: "text"; text: string } | { type: "tool-call"; toolCallId: string; toolName: string; args: Record<string, unknown> }> = [];
+      const outputContent: Array<{ type: "text"; text: string } | { type: "tool-call"; toolCallId: string; toolName: string; input: Record<string, unknown> }> = [];
       outputContent.push({ type: "text" as const, text: content });
 
       const rawToolCalls = message.tool_calls as
@@ -582,7 +593,7 @@ export function createCustomOpenAIModel(
         | undefined;
       if (rawToolCalls) {
         for (const tc of rawToolCalls) {
-          let parsed: Record<string, unknown> = {};
+          let parsed: Rec= {};
           try {
             parsed = JSON.parse(tc.function.arguments);
           } catch {}
@@ -590,7 +601,7 @@ export function createCustomOpenAIModel(
             type: "tool-call",
             toolCallId: tc.id,
             toolName: tc.function.name,
-            args: parsed,
+            input: tc.function.arguments,
           });
         }
       }

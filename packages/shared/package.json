@@ -6,6 +6,7 @@
         ".": "./src/index.ts"
     },
     "dependencies": {
+        "@opencode-ai/models": "0.0.19",
         "zod": "^4.4.3"
     },
     "devDependencies": {
