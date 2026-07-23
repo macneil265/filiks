@@ -114,6 +114,8 @@ function SessionChat({ session} : {session: SessionData}) {
       }
       loading={streaming.status === "streaming"}
       interruptible={streaming.status === "streaming"}
+      parts={streaming.status === "streaming" ? streaming.parts : []}
+      session={{ title: session.title, createdAt: session.createdAt, cwd: session.cwd }}
     >
       {messages.map((msg) => (
         <ChatMessage key={msg.id} msg={msg}/>

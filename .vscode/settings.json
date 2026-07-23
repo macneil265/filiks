@@ -1,4 +1,5 @@
 {
   "cSpell.words": ["cuid", "filiks", "opentui", "Renderable", "scrollbox"],
-  "codeium.enableCodeLens": false
+  "codeium.enableCodeLens": false,
+  "cSpell.ignoreWords": ["Pkce"]
 }

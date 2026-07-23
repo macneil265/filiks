@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@filiks/database/client";
 import { Role, Mode, MessageStatus } from "@filiks/database/enums";
 import { findSupportedChatModel } from "@filiks/shared";
+import type { AuthenticatedEnv } from "../../middleware/require-auth";
 
 const createSessionSchema = z.object({
   title: z.string(),
@@ -36,9 +37,12 @@ const createSessionValidator = zValidator(
   },
 );
 
-const app = new Hono()
+const app = new Hono<AuthenticatedEnv>()
   .get("/", async (c) => {
+
+    const userId = c.get("userId");
     const sessions = await db.session.findMany({
+      where: { UserId:userId },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -62,9 +66,10 @@ const app = new Hono()
     // throw new HTTPException(500, {message: "Mock error: session loading failed"})
 
     const id = c.req.param("id");
+    const userId = c.get("userId");
 
     const session = await db.session.findUnique({
-      where: { id },
+      where: { id, UserId: userId },
       include: {
         messages: { orderBy: { createdAt: "asc" } },
       },
@@ -73,7 +78,7 @@ const app = new Hono()
     if (!session) {
       Sentry.logger.warn("Session not found", {
         sessionId: id.slice(0, 8),
-        userId: "mock-user"
+        userId: userId.slice(0, 8),
       });
       return c.json({ error: "Session not found" }, 404);
     }
@@ -89,12 +94,13 @@ const app = new Hono()
     // MOCK: Uncomment to simulate session loading error
     // throw new HTTPException(500, {message: "Mock error: session loading failed"})
 
+    const userId = c.get("userId");
     const { initialMessage, ...data } = c.req.valid("json");
 
     const session = await db.session.create({
       data: {
         ...data,
-        UserId: "mock-user",
+        UserId: userId,
         ...(initialMessage && {
           messages: {
             create: {

@@ -52,10 +52,14 @@ export const chatStreamEventSchema = z.discriminatedUnion("type", [
     type: z.literal("done"),
     messageId: z.string(),
     durationMs: z.number(),
+    model: z.string(),
   }),
   z.object({
       type: z.literal("error"),
       message: z.string(),
+  }),
+  z.object({
+      type: z.literal("reset"),
   }),
 ]);
 
