@@ -276,7 +276,7 @@ async function streamAIResponse(
         SessionId: sessionId,
         role: "ASSISTANT",
         status: MessageStatus.INTERRUPTED,
-        model,
+        model: usedModel,
         content: fullText,
         parts: validatedParts,
         mode,
@@ -302,6 +302,11 @@ async function streamAIResponse(
         const resolvedModel = resolveChatModel(candidateModel);
         usedModel = candidateModel;
         parts.length = 0;
+
+        if (i > 0) {
+          const resetEvent: ChatStreamEvent = { type: "reset" };
+          await stream.writeSSE({ event: "reset", data: JSON.stringify(resetEvent) });
+        }
 
         const result = aiStreamText({
           model: resolvedModel.model,
@@ -410,7 +415,7 @@ async function streamAIResponse(
             SessionId: sessionId,
             role: "ASSISTANT",
             status: MessageStatus.COMPLETE,
-            model,
+            model: usedModel,
             content: fullText,
             parts: validateParts,
             mode,
@@ -452,7 +457,7 @@ async function streamAIResponse(
         SessionId: sessionId,
         role: "ERROR",
         status: MessageStatus.COMPLETE,
-        model,
+        model: usedModel,
         content: message,
         mode,
       },
@@ -469,7 +474,7 @@ const app = new Hono<AuthenticatedEnv>()
     const userId = c.get("userId");
 
     const session = await db.session.findUnique({
-      where: { id: sessionId, userId},
+      where: { id: sessionId, UserId: userId},
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
 
@@ -544,7 +549,7 @@ const app = new Hono<AuthenticatedEnv>()
     const userId = c.get("userId");
 
     const session = await db.session.findUnique({
-      where: { id: sessionId, userId },
+      where: { id: sessionId, UserId: userId },
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
 

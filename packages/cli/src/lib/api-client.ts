@@ -16,7 +16,7 @@ export const apiClient = hc<AppType>(
         headers.set("Authorization", `Bearer ${auth.token}`);
       }
 
-      const response = await fetch(input, { ...init, headers });
+      const response = await fetch(input, { ...init, headers, signal: init?.signal ?? AbortSignal.timeout(30_000) });
       if (response.status === 401) {
         clearAuth();
       }

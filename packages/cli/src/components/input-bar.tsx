@@ -28,7 +28,7 @@ import { Mode } from "@filiks/database/enums";
 const MAX_VISIBLE_MENTIONS = 8;
 const CURRENT_DIRECTORY = process.cwd();
 const MAX_FALLBACK_MENTION_CANDIDATES = 32;
-const MENTION_QUERY_CHARACTER = /[A-Za-z0._/-]/;
+const MENTION_QUERY_CHARACTER = /[A-Za-z0-9._/-]/;
 const RECURSIVE_MENTION_IGNORED_DIRECTORIES = new Set(["node_modules"]);
 const PASTE_CHAR_THRESHOLD = 200;
 
@@ -387,8 +387,8 @@ export function InputBar({ onSubmit, disabled }: Props) {
 
       const id = nextChipId.current++;
       setPasteChips((prev) => [...prev, { id, content: pastedContent, lines }]);
-      textarea.setText("");
-      previousTextLengthRef.current = 0;
+      textarea.setText(text.slice(0, pasteStart) + text.slice(cursorPos));
+      previousTextLengthRef.current = text.length - addedLength;
       return;
     }
 

@@ -50,6 +50,7 @@ export async function performLogin(){
     return new Promise<{token: string}>((resolve, reject) => {
         const server = Bun.serve({
             port: 0,
+            hostname: "127.0.0.1",
             async fetch(req) {
                 const url = new URL(req.url);
 
@@ -152,14 +153,11 @@ export async function performLogin(){
     void open(authorizeUrl.toString());
 
     setTimeout(() => {
-
-        setTimeout(() => {
-            if (!settled) {
-                settled = true;
-                server.stop();
-                reject(new Error("Login timed out"));
-            }
-        })
+        if (!settled) {
+            settled = true;
+            server.stop();
+            reject(new Error("Login timed out"));
+        }
     }, LOGIN_TIMEOUT_MS);
 });
 }

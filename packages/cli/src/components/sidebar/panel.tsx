@@ -19,7 +19,11 @@ export function Panel({ title, defaultOpen = true, children }: Props) {
         alignItems="center"
         gap={1}
         backgroundColor={RGBA.fromInts(255, 255, 255, 12)}
+        focusable
         onMouseDown={() => setOpen((v) => !v)}
+        onKeyDown={(key) => {
+          if (key === "enter" || key === "space") setOpen((v) => !v);
+        }}
       >
         <text>{open ? "▼" : "▶"}</text>
         <text attributes={TextAttributes.BOLD} fg={colors.text}>

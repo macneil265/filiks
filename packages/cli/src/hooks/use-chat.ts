@@ -195,6 +195,10 @@ export function useChat(sessionId: string, initialMessages: Message[]) {
         }
 
         switch (event.type) {
+          case "reset": {
+            parts.length = 0;
+            break;
+          }
           case "reasoning-delta": {
             const last = parts[parts.length - 1];
             if (last && last.type === "reasoning") {

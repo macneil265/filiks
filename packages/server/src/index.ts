@@ -93,6 +93,7 @@ app.onError((error, c) => {
     );
   }
 
+  console.error("[onError]", error instanceof Error ? error.message : error);
   Sentry.logger.error("Unhandled server error", {
     path: c.req.path,
     method: c.req.method,

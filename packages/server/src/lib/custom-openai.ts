@@ -593,7 +593,7 @@ export function createCustomOpenAIModel(
         | undefined;
       if (rawToolCalls) {
         for (const tc of rawToolCalls) {
-          let parsed: Rec= {};
+          let parsed: Record<string, unknown> = {};
           try {
             parsed = JSON.parse(tc.function.arguments);
           } catch {}

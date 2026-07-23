@@ -21,12 +21,13 @@ export interface SupportedChatModel {
 
 import { providers as snapshotProviders, models as snapshotModels } from "@opencode-ai/models/snapshot";
 
-const ZEN_FREE_MODELS: SupportedChatModel[] = [];
+function buildFreeModelList(
+  providerKey: string,
+  cache: SupportedChatModel[],
+): SupportedChatModel[] {
+  if (cache.length > 0) return cache;
 
-function buildZenModelList(): SupportedChatModel[] {
-  if (ZEN_FREE_MODELS.length > 0) return ZEN_FREE_MODELS;
-
-  const provider = snapshotProviders.opencode;
+  const provider = (snapshotProviders as Record<string, typeof snapshotProviders.opencode>)[providerKey];
   if (!provider) return [];
 
   for (const [modelId, model] of Object.entries(provider.models)) {
@@ -34,10 +35,10 @@ function buildZenModelList(): SupportedChatModel[] {
     if (!cost || cost.input !== 0 || cost.output !== 0) continue;
     if (!model.tool_call) continue;
 
-    ZEN_FREE_MODELS.push({
+    cache.push({
       id: modelId,
       name: model.name,
-      provider: "opencode",
+      provider: providerKey,
       providerName: provider.name,
       pricing: {
         inputUsdPerMillionTokens: 0,
@@ -52,41 +53,18 @@ function buildZenModelList(): SupportedChatModel[] {
     });
   }
 
-  return ZEN_FREE_MODELS;
+  return cache;
 }
 
+const ZEN_FREE_MODELS: SupportedChatModel[] = [];
 const NVIDIA_FREE_MODELS: SupportedChatModel[] = [];
 
+function buildZenModelList(): SupportedChatModel[] {
+  return buildFreeModelList("opencode", ZEN_FREE_MODELS);
+}
+
 function buildNvidiaModelList(): SupportedChatModel[] {
-  if (NVIDIA_FREE_MODELS.length > 0) return NVIDIA_FREE_MODELS;
-
-  const provider = snapshotProviders.nvidia;
-  if (!provider) return [];
-
-  for (const [modelId, model] of Object.entries(provider.models)) {
-    const cost = model.cost;
-    if (!cost || cost.input !== 0 || cost.output !== 0) continue;
-    if (!model.tool_call) continue;
-
-    NVIDIA_FREE_MODELS.push({
-      id: modelId,
-      name: model.name,
-      provider: "nvidia",
-      providerName: provider.name,
-      pricing: {
-        inputUsdPerMillionTokens: 0,
-        outputUsdPerMillionTokens: 0,
-      },
-      context: model.limit.context,
-      toolCall: true,
-      reasoning: model.reasoning,
-      env: provider.env,
-      npm: provider.npm,
-      api: provider.api,
-    });
-  }
-
-  return NVIDIA_FREE_MODELS;
+  return buildFreeModelList("nvidia", NVIDIA_FREE_MODELS);
 }
 
 const ZEN_MODELS_INTERNAL = buildZenModelList();

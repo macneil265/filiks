@@ -28,6 +28,7 @@ export function getUser(): { email?: string; name?: string; id: string } | null 
         const payload = JSON.parse(
             Buffer.from(jwt.split(".")[1]!, "base64url").toString(),
         );
+        if (typeof payload.sub !== "string") return null;
         return {
             email: payload.email,
             name: payload.name,
